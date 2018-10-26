@@ -5,6 +5,7 @@ name = "pypi"
 
 [packages]
 face-recognition = "*"
+pillow = "*"
 
 [dev-packages]
 
