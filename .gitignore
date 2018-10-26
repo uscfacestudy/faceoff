@@ -1,0 +1,12 @@
+# Editors
+/.idea/
+
+# Python
+__pycache__
+*.pyc
+
+# MacOS
+.DS_Store
+
+# Data
+/stimuli/
