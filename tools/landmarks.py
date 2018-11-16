@@ -1,4 +1,3 @@
-
 import face_recognition
 import PIL.Image
 import PIL.ImageDraw
@@ -14,23 +13,19 @@ def eye_angle(face_landmarks):
     return float(raw_angle)
 
 
-def nose_angle(face_landmarks):
-    """Compute the angle from vertical."""
-
-
-def draw_landmarks(path):
+def draw_landmarks(path, custom_landmarks=None, custom_center=(0, 0)):
     """Draw landmarks on a face."""
 
     face_image = face_recognition.load_image_file(path)
     pil_image = PIL.Image.fromarray(face_image)
 
-    face_location = face_recognition.face_locations(face_image)[0]
-    face_landmarks = face_recognition.face_landmarks(face_image)[0]
+    # face_location = face_recognition.face_locations(face_image)[0]
+    face_landmarks = custom_landmarks or face_recognition.face_landmarks(face_image)[0]
 
     drawing = PIL.ImageDraw.Draw(pil_image)
-    top, right, bottom, left = face_location
-    drawing.rectangle(((left, top), (right, bottom)))
+    # top, right, bottom, left = face_location
+    # drawing.rectangle(((left, top), (right, bottom)))
     for name in face_landmarks:
-        drawing.line(face_landmarks[name])
+        drawing.line(list((x + custom_center[0], y + custom_center[1]) for x, y in face_landmarks[name]))
 
     return pil_image
