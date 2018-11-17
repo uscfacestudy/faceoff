@@ -30,11 +30,11 @@ def warp_image(image, sources, destinations):
             dx = dy = 0
             for source, destination in zip(sources, destinations):
                 delta = destination[0] - source[0], destination[1] - source[1]
-                magnitude = 1 / (3 * (d((x, y), destination) / d(delta)) ** 4 + 1)
+                magnitude = 1 / ((d((x, y), destination) / d(delta))**4 + 1)
                 dx += magnitude * delta[0]
                 dy += magnitude * delta[1]
             nx = clamp(x + math.floor(dx), 0, image.size[0] - 1)
             ny = clamp(y + math.floor(dy), 0, image.size[1] - 1)
-            result_pixels[x, y] = image_pixels[nx, ny]
+            result_pixels[x, y] = image_pixels[nx, ny][0]
 
     return result

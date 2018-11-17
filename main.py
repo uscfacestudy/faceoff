@@ -14,16 +14,11 @@ import numpy as np
 
 from tools.landmarks import *
 from tools.transform import *
+from tools.warp import *
 
 from cache import Cache
 
 cache = Cache()
-
-
-LANDMARKS = (
-    "chin", "left_eyebrow", "right_eyebrow",
-    "nose_bridge", "nose_tip", "left_eye", "right_eye",
-    "top_lip", "bottom_lip")
 
 
 def get_stretched(directory, level):
@@ -36,14 +31,16 @@ def get_stretched(directory, level):
        serialize=lambda path: path + "_landmarks",  # serialize from the path
        file=lambda path: os.path.basename(path) + ".json",
        store=json.dump,
-       retrieve=json.load)
+       retrieve=lambda file: force_tuples(json.load(file)))
 def extract_landmark_data(path: str) -> Dict[str, Any]:
     """Normalize the rotation of a face."""
 
     face_image = face_recognition.load_image_file(path)
     face_landmarks = face_recognition.face_landmarks(face_image)[0]
     angle = eye_angle(face_landmarks)
-    return {"landmarks": face_landmarks, "angle": angle}
+    center = landmarks_center(face_landmarks)
+    size = landmarks_size(face_landmarks)
+    return {"landmarks": face_landmarks, "angle": angle, "center": center, "size": size}
 
 
 def normalize_landmarks(data: Dict[str, Any]):
@@ -54,56 +51,80 @@ def normalize_landmarks(data: Dict[str, Any]):
     return data
 
 
-def find_center(landmarks):
-    """Provide a center point for a facial landmark set."""
+@cache(persist=True,
+       file="average.json",
+       store=json.dump,
+       retrieve=lambda file: force_tuples(json.load(file)))
+def average_landmarks():
+    """Compute the average for all normals."""
 
-    return landmarks["nose_bridge"][-1]
-
-
-def average_landmarks(landmarks=None, *, of: List[Dict[str, Any]]=[]):
-    """This is a needlessly complicated way to compute an average.
-
-    It's more a proof of concept, to be honest. We're abusing the fact
-    that mutable default parameters retain their value between calls.
-    """
-
-    if landmarks is not None:
-        of.append(landmarks)
-        return
+    of = []
+    for path in get_stretched("stimuli/normal", 100):
+        landmarks = extract_landmark_data("stimuli/normal/" + path)
+        of.append(normalize_landmarks(landmarks))
 
     average = {}
-    for name in LANDMARKS:
+    for name, features in LANDMARKS.items():
         average[name] = []
-        for i in range(len(of[0]["landmarks"][name])):
+        for i in range(features):
             x = y = 0
             count = len(of)
             for j in range(count):
-                center = find_center(of[j]["landmarks"])
-                x += of[j]["landmarks"][name][i][0] - center[0]
-                y += of[j]["landmarks"][name][i][1] - center[1]
+                center = of[j]["center"]
+                width, height = of[j]["size"]
+                x += (of[j]["landmarks"][name][i][0] - center[0]) / height
+                y += (of[j]["landmarks"][name][i][1] - center[1]) / height
             average[name].append((x/count, y/count))
 
     return average
 
 
+def scale_landmarks(landmarks, center, size):
+    """Create a scaled and centered copy of landmarks."""
+
+    copy = {}
+    for name in LANDMARKS:
+        copy[name] = []
+        for x, y in landmarks[name]:
+            copy[name].append((x * size[0] + center[0], y * size[1] + center[1]))
+    return copy
+
+
+def force_tuples(landmarks):
+    """Convert lists to tuples."""
+
+    for name in LANDMARKS:
+        landmarks[name] = list(map(tuple, landmarks[name]))
+    return landmarks
+
+
 def main():
     """Run with the script."""
 
-    for path in get_stretched("stimuli/normal", 100):
-        landmarks = extract_landmark_data("stimuli/normal/" + path)
-        landmarks = normalize_landmarks(landmarks)
-        average_landmarks(landmarks)
-
     average = average_landmarks()
 
+    path = "stimuli/normal/c01_100.jpg"
+    face_image = face_recognition.load_image_file(path)
+    pil_image = PIL.Image.fromarray(face_image)
 
-    # for path in os.listdir("stimuli/data/"):
-    #     if path.endswith("json"):
-    #         print(normalize_landmarks("stimuli/data/" + path))
-    #         break
+    example = extract_landmark_data(path)
+    scaled_average = scale_landmarks(average, example["center"], example["size"])
 
-    center = find_center(extract_landmark_data("stimuli/normal/c01_100.jpg")["landmarks"])
-    draw_landmarks("stimuli/normal/c01_100.jpg", custom_landmarks=average, custom_center=center).show()
+    draw_landmarks(pil_image, scaled_average)
+    # pil_image.show()
+
+    sources = []
+    destinations = []
+    for name, features in LANDMARKS.items():
+        for i in range(features):
+            sources.append(example["landmarks"][name][i])
+            destinations.append(tuple(map(int, scaled_average[name][i])))
+
+    result = warp_image(pil_image, sources, destinations)
+
+    draw_landmarks(result, example["landmarks"])
+
+    result.show()
 
 
 if __name__ == "__main__":
